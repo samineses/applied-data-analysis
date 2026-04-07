@@ -2,8 +2,8 @@ import pandas as pd
 import os
 import numpy as np
 from tkinter import Tk, filedialog
-from tkinter import simpledialog
 import matplotlib.pyplot as plt
+from windowEstimation import estimate_optimal_window
 
 # ===============================
 # Seleção do arquivo
@@ -26,6 +26,7 @@ arquivo_saida = os.path.join(
 if os.path.exists(arquivo_saida):
     print("Arquivo _AMPL já existe. Lendo dados base...")
     df = pd.read_excel(arquivo_saida)
+
 else:
     print("Criando arquivo _AMPL (cache de dados base)...")
 
@@ -50,21 +51,17 @@ else:
     df.to_excel(arquivo_saida, index=False)
 
 # ===============================
-# Parâmetro de suavização
+# Parâmetros temporais
 # ===============================
 dt = df["tempo"].diff().median()
 
-root = Tk()
-root.withdraw()
+# ===============================
+# Estimativa automática da janela
+# ===============================
+janela, info = estimate_optimal_window(df, dt)
 
-janela = simpledialog.askinteger(
-    title="Parâmetro de Suavização",
-    prompt="Digite o valor da janela (número de amostras):",
-    minvalue=1
-)
-
-if janela is None:
-    raise ValueError("Nenhum valor de janela foi fornecido.")
+print(f"Janela estimada automaticamente: {janela}")
+#print("Detalhes da estimativa:", info)
 
 # ===============================
 # 1) Suavização
@@ -108,13 +105,12 @@ extremos_df = pd.DataFrame(
 )
 
 # ===============================
-# CONFIG: tamanho fixo 3840x1942 px
+# CONFIG: tamanho fixo da figura
 # ===============================
 W_PX, H_PX = 3840, 1942
-DPI = 100  # pode mudar, mantendo o tamanho final em px
+DPI = 100
 FIGSIZE = (W_PX / DPI, H_PX / DPI)
 
-# Nome do arquivo de imagem de saída
 arquivo_img = os.path.join(
     pasta_origem,
     f"{os.path.splitext(os.path.basename(arquivo_origem))[0]}_AMPL_{W_PX}x{H_PX}.png"
@@ -123,7 +119,7 @@ arquivo_img = os.path.join(
 # ===============================
 # Gráfico
 # ===============================
-fig = plt.figure(figsize=FIGSIZE, dpi=DPI)
+plt.figure(figsize=FIGSIZE, dpi=DPI)
 
 plt.plot(df["tempo"], df["Amplitudes"],
          color="blue", alpha=0.3, label="Amplitudes")
@@ -133,13 +129,15 @@ plt.plot(df_suave["tempo"], df_suave["Amplitude_suave"],
 
 plt.xlabel("Tempo (s)")
 plt.ylabel("Amplitude")
-plt.title(f"Janela = {janela} | tempo_min = {tempo_min:.2f} s | dt = {dt:.2f} s")
+plt.title(
+    f"Janela automática = {janela} | "
+    f"tempo_min = {tempo_min:.2f} s | "
+    f"dt = {dt:.2f} s"
+)
 plt.grid(True)
 plt.legend()
 
-# Salva com tamanho exato em pixels
 plt.savefig(arquivo_img, dpi=DPI, bbox_inches=None, pad_inches=0)
-
 plt.show()
 
 print(f"Arquivo base utilizado:\n{arquivo_saida}")

@@ -1,0 +1,8 @@
+“A janela de suavização foi estimada a partir do período funcional do movimento, calculado pela mediana do intervalo temporal entre máximos locais do sinal suavizado, convertida para número de amostras a partir do intervalo de aquisição.”
+
+✅ Suavização leve (rolling(window=3))
+✅ Detecção de máximos locais
+✅ Diferença de tempo entre máximos
+✅ Mediana desses intervalos
+✅ Conversão período → janela
+✅ Restrição [min_window, max_window]
