@@ -23,11 +23,9 @@ arquivo_saida = os.path.join(
 # ===============================
 # Carregamento dos dados (CACHE)
 # ===============================
-
 if os.path.exists(arquivo_saida):
     print("Arquivo _AMPL já existe. Lendo dados base...")
     df = pd.read_excel(arquivo_saida)
-
 else:
     print("Criando arquivo _AMPL (cache de dados base)...")
 
@@ -110,9 +108,22 @@ extremos_df = pd.DataFrame(
 )
 
 # ===============================
+# CONFIG: tamanho fixo 3840x1942 px
+# ===============================
+W_PX, H_PX = 3840, 1942
+DPI = 100  # pode mudar, mantendo o tamanho final em px
+FIGSIZE = (W_PX / DPI, H_PX / DPI)
+
+# Nome do arquivo de imagem de saída
+arquivo_img = os.path.join(
+    pasta_origem,
+    f"{os.path.splitext(os.path.basename(arquivo_origem))[0]}_AMPL_{W_PX}x{H_PX}.png"
+)
+
+# ===============================
 # Gráfico
 # ===============================
-plt.figure(figsize=(12,6))
+fig = plt.figure(figsize=FIGSIZE, dpi=DPI)
 
 plt.plot(df["tempo"], df["Amplitudes"],
          color="blue", alpha=0.3, label="Amplitudes")
@@ -125,6 +136,11 @@ plt.ylabel("Amplitude")
 plt.title(f"Janela = {janela} | tempo_min = {tempo_min:.2f} s | dt = {dt:.2f} s")
 plt.grid(True)
 plt.legend()
+
+# Salva com tamanho exato em pixels
+plt.savefig(arquivo_img, dpi=DPI, bbox_inches=None, pad_inches=0)
+
 plt.show()
 
 print(f"Arquivo base utilizado:\n{arquivo_saida}")
+print(f"Imagem salva em:\n{arquivo_img}")
