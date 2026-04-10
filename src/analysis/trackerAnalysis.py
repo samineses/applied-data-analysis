@@ -26,28 +26,21 @@ arquivo_saida = os.path.join(
 if os.path.exists(arquivo_saida):
     print("Arquivo _AMPL já existe. Lendo dados base...")
     df = pd.read_excel(arquivo_saida)
-
 else:
     print("Criando arquivo _AMPL (cache de dados base)...")
-
     df = pd.read_excel(
         arquivo_origem,
         usecols=[0, 1],
         names=["tempo", "Amplitudes"],
         header=0
     )
-
-    # Conversões
     df["tempo"] = pd.to_numeric(df["tempo"], errors="coerce")
     df["Amplitudes"] = (
-        df["Amplitudes"]
-        .astype(str)
+        df["Amplitudes"].astype(str)
         .str.replace(",", ".", regex=False)
     )
     df["Amplitudes"] = pd.to_numeric(df["Amplitudes"], errors="coerce")
     df = df.dropna().reset_index(drop=True)
-
-    # Salva SOMENTE os dados base
     df.to_excel(arquivo_saida, index=False)
 
 # ===============================
@@ -58,87 +51,99 @@ dt = df["tempo"].diff().median()
 # ===============================
 # Estimativa automática da janela
 # ===============================
-janela, info = estimate_optimal_window(df, dt)
-
+janela, _ = estimate_optimal_window(df, dt)
 print(f"Janela estimada automaticamente: {janela}")
-#print("Detalhes da estimativa:", info)
 
 # ===============================
-# 1) Suavização
+# Suavização (ANÁLISE)
 # ===============================
 df["Amplitude_suave"] = df["Amplitudes"].rolling(
     window=janela, center=True
 ).mean()
 
+# df_suave EXISTE A PARTIR DAQUI
 df_suave = df.dropna().reset_index(drop=True)
 
 # ===============================
-# 2) Desvio padrão
+# VARIABILIDADE (mantida para análise futura)
 # ===============================
 sigma = df_suave["Amplitude_suave"].std()
 tempo_min = janela * dt
 
+# =====================================================
+# =============== VISUALIZAÇÃO — OPÇÃO C ===============
+# =====================================================
+
+# -------- CONFIGURAÇÕES --------
+BLOCO_TEMPO = 30.0   # segundos por bloco (resumo temporal)
+FIGSIZE_TREND = (16, 5)
+FIGSIZE_DIST = (10, 5)
+
 # ===============================
-# 3) Máximos e mínimos reais
+# 1) RESUMO TEMPORAL (TENDÊNCIA)
 # ===============================
-extremos = []
-ultimo_tempo = -np.inf
 
-for i in range(1, len(df_suave) - 1):
-    y_prev = df_suave.loc[i-1, "Amplitude_suave"]
-    y = df_suave.loc[i, "Amplitude_suave"]
-    y_next = df_suave.loc[i+1, "Amplitude_suave"]
-    t = df_suave.loc[i, "tempo"]
+# Criar índice de blocos
+df_suave["bloco"] = (df_suave["tempo"] // BLOCO_TEMPO).astype(int)
 
-    if y_prev < y > y_next:
-        if abs(y - (y_prev + y_next) / 2) > sigma and t - ultimo_tempo >= tempo_min:
-            extremos.append([t, y, "máximo"])
-            ultimo_tempo = t
-
-    if y_prev > y < y_next:
-        if abs(y - (y_prev + y_next) / 2) > sigma and t - ultimo_tempo >= tempo_min:
-            extremos.append([t, y, "mínimo"])
-            ultimo_tempo = t
-
-extremos_df = pd.DataFrame(
-    extremos, columns=["tempo", "Amplitude_suave", "tipo"]
+resumo = (
+    df_suave
+    .groupby("bloco")["Amplitude_suave"]
+    .agg(
+        max_medio="max",
+        min_medio="min",
+        media="mean"
+    )
+    .reset_index()
 )
 
-# ===============================
-# CONFIG: tamanho fixo da figura
-# ===============================
-W_PX, H_PX = 3840, 1942
-DPI = 100
-FIGSIZE = (W_PX / DPI, H_PX / DPI)
+resumo["tempo_bloco"] = resumo["bloco"] * BLOCO_TEMPO
+resumo["amplitude_funcional"] = resumo["max_medio"] - resumo["min_medio"]
 
-arquivo_img = os.path.join(
-    pasta_origem,
-    f"{os.path.splitext(os.path.basename(arquivo_origem))[0]}_AMPL_{W_PX}x{H_PX}.png"
-)
+# ----- Gráfico de tendência -----
+plt.figure(figsize=FIGSIZE_TREND)
 
-# ===============================
-# Gráfico
-# ===============================
-plt.figure(figsize=FIGSIZE, dpi=DPI)
+plt.plot(resumo["tempo_bloco"], resumo["max_medio"],
+         label="Amplitude máxima", linewidth=2)
 
-plt.plot(df["tempo"], df["Amplitudes"],
-         color="blue", alpha=0.3, label="Amplitudes")
+plt.plot(resumo["tempo_bloco"], resumo["min_medio"],
+         label="Amplitude mínima", linewidth=2)
 
-plt.plot(df_suave["tempo"], df_suave["Amplitude_suave"],
-         color="red", linewidth=2, label="Amplitude suavizada")
+plt.plot(resumo["tempo_bloco"], resumo["amplitude_funcional"],
+         label="Amplitude funcional (máx − mín)",
+         linewidth=2.5, linestyle="--")
 
 plt.xlabel("Tempo (s)")
 plt.ylabel("Amplitude")
 plt.title(
-    f"Janela automática = {janela} | "
-    f"tempo_min = {tempo_min:.2f} s | "
-    f"dt = {dt:.2f} s"
+    f"Tendência do movimento | Janela = {janela} | Blocos de {BLOCO_TEMPO:.0f}s"
 )
 plt.grid(True)
 plt.legend()
-
-plt.savefig(arquivo_img, dpi=DPI, bbox_inches=None, pad_inches=0)
+plt.tight_layout()
 plt.show()
 
-print(f"Arquivo base utilizado:\n{arquivo_saida}")
-print(f"Imagem salva em:\n{arquivo_img}")
+# ===============================
+# 2) DISTRIBUIÇÃO GLOBAL
+# ===============================
+
+plt.figure(figsize=FIGSIZE_DIST)
+
+plt.boxplot(
+    df_suave["Amplitude_suave"],
+    vert=True,
+    patch_artist=True,
+    boxprops=dict(facecolor="lightgray")
+)
+
+plt.ylabel("Amplitude")
+plt.title("Distribuição global da amplitude do movimento")
+plt.grid(axis="y")
+plt.tight_layout()
+plt.show()
+
+# ===============================
+# FINALIZAÇÃO
+# ===============================
+print(f"Arquivo base utilizado: {arquivo_saida}")
+print("Visualização concluída (Opção C).")
