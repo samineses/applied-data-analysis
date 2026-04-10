@@ -15,33 +15,34 @@ arquivo_origem = filedialog.askopenfilename(
 )
 
 pasta_origem = os.path.dirname(arquivo_origem)
-arquivo_saida = os.path.join(
+base_nome = os.path.splitext(os.path.basename(arquivo_origem))[0]
+
+arquivo_auditoria = os.path.join(
     pasta_origem,
-    f"{os.path.splitext(os.path.basename(arquivo_origem))[0]}_AMPL.xlsx"
+    f"{base_nome}_AUDITORIA.xlsx"
+)
+
+arquivo_blocos = os.path.join(
+    pasta_origem,
+    f"{base_nome}_BLOCOS30S.xlsx"
 )
 
 # ===============================
-# Carregamento dos dados (CACHE)
+# Leitura e padronização
 # ===============================
-if os.path.exists(arquivo_saida):
-    print("Arquivo _AMPL já existe. Lendo dados base...")
-    df = pd.read_excel(arquivo_saida)
-else:
-    print("Criando arquivo _AMPL (cache de dados base)...")
-    df = pd.read_excel(
-        arquivo_origem,
-        usecols=[0, 1],
-        names=["tempo", "Amplitudes"],
-        header=0
-    )
-    df["tempo"] = pd.to_numeric(df["tempo"], errors="coerce")
-    df["Amplitudes"] = (
-        df["Amplitudes"].astype(str)
-        .str.replace(",", ".", regex=False)
-    )
-    df["Amplitudes"] = pd.to_numeric(df["Amplitudes"], errors="coerce")
-    df = df.dropna().reset_index(drop=True)
-    df.to_excel(arquivo_saida, index=False)
+df = pd.read_excel(
+    arquivo_origem,
+    usecols=[0, 1],
+    names=["tempo", "Amplitudes"],
+    header=0
+)
+
+df["tempo"] = pd.to_numeric(df["tempo"], errors="coerce")
+df["Amplitudes"] = (
+    df["Amplitudes"].astype(str).str.replace(",", ".", regex=False)
+)
+df["Amplitudes"] = pd.to_numeric(df["Amplitudes"], errors="coerce")
+df = df.dropna().reset_index(drop=True)
 
 # ===============================
 # Parâmetros temporais
@@ -55,38 +56,28 @@ janela, _ = estimate_optimal_window(df, dt)
 print(f"Janela estimada automaticamente: {janela}")
 
 # ===============================
-# Suavização (ANÁLISE)
+# Suavização
 # ===============================
 df["Amplitude_suave"] = df["Amplitudes"].rolling(
     window=janela, center=True
 ).mean()
 
-# df_suave EXISTE A PARTIR DAQUI
 df_suave = df.dropna().reset_index(drop=True)
 
 # ===============================
-# VARIABILIDADE (mantida para análise futura)
+# SALVAR TABELA DE AUDITORIA
 # ===============================
-sigma = df_suave["Amplitude_suave"].std()
-tempo_min = janela * dt
-
-# =====================================================
-# =============== VISUALIZAÇÃO — OPÇÃO C ===============
-# =====================================================
-
-# -------- CONFIGURAÇÕES --------
-BLOCO_TEMPO = 30.0   # segundos por bloco (resumo temporal)
-FIGSIZE_TREND = (16, 5)
-FIGSIZE_DIST = (10, 5)
+df_suave.to_excel(arquivo_auditoria, index=False)
+print(f"Tabela de auditoria salva em: {arquivo_auditoria}")
 
 # ===============================
-# 1) RESUMO TEMPORAL (TENDÊNCIA)
+# RESUMO POR BLOCOS DE 30s
 # ===============================
+BLOCO_TEMPO = 30.0
 
-# Criar índice de blocos
 df_suave["bloco"] = (df_suave["tempo"] // BLOCO_TEMPO).astype(int)
 
-resumo = (
+resumo_blocos = (
     df_suave
     .groupby("bloco")["Amplitude_suave"]
     .agg(
@@ -97,21 +88,36 @@ resumo = (
     .reset_index()
 )
 
-resumo["tempo_bloco"] = resumo["bloco"] * BLOCO_TEMPO
-resumo["amplitude_funcional"] = resumo["max_medio"] - resumo["min_medio"]
+resumo_blocos["tempo_bloco"] = resumo_blocos["bloco"] * BLOCO_TEMPO
+resumo_blocos["amplitude_funcional"] = (
+    resumo_blocos["max_medio"] - resumo_blocos["min_medio"]
+)
+
+resumo_blocos = resumo_blocos[
+    ["tempo_bloco", "max_medio", "min_medio", "amplitude_funcional"]
+]
+
+# ===============================
+# SALVAR TABELA DE BLOCOS
+# ===============================
+resumo_blocos.to_excel(arquivo_blocos, index=False)
+print(f"Tabela por blocos salva em: {arquivo_blocos}")
+
+# ===============================
+# VISUALIZAÇÃO — OPÇÃO C
+# ===============================
 
 # ----- Gráfico de tendência -----
-plt.figure(figsize=FIGSIZE_TREND)
+plt.figure(figsize=(16, 5))
 
-plt.plot(resumo["tempo_bloco"], resumo["max_medio"],
+plt.plot(resumo_blocos["tempo_bloco"], resumo_blocos["max_medio"],
          label="Amplitude máxima", linewidth=2)
 
-plt.plot(resumo["tempo_bloco"], resumo["min_medio"],
+plt.plot(resumo_blocos["tempo_bloco"], resumo_blocos["min_medio"],
          label="Amplitude mínima", linewidth=2)
 
-plt.plot(resumo["tempo_bloco"], resumo["amplitude_funcional"],
-         label="Amplitude funcional (máx − mín)",
-         linewidth=2.5, linestyle="--")
+plt.plot(resumo_blocos["tempo_bloco"], resumo_blocos["amplitude_funcional"],
+         label="Amplitude funcional", linewidth=2.5, linestyle="--")
 
 plt.xlabel("Tempo (s)")
 plt.ylabel("Amplitude")
@@ -123,11 +129,8 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# ===============================
-# 2) DISTRIBUIÇÃO GLOBAL
-# ===============================
-
-plt.figure(figsize=FIGSIZE_DIST)
+# ----- Gráfico de distribuição -----
+plt.figure(figsize=(10, 5))
 
 plt.boxplot(
     df_suave["Amplitude_suave"],
@@ -142,8 +145,4 @@ plt.grid(axis="y")
 plt.tight_layout()
 plt.show()
 
-# ===============================
-# FINALIZAÇÃO
-# ===============================
-print(f"Arquivo base utilizado: {arquivo_saida}")
-print("Visualização concluída (Opção C).")
+print("Processamento concluído com sucesso.")
