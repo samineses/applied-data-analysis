@@ -1,28 +1,83 @@
-#o que é feito no código
 
-1.Você estima o intervalo de amostragem do sinal
--é o tempo típico entre amostras e a escala temporal real do sinal.
-2.calculo da janela
--O valor da janela controla o quanto o sinal é suavizado
--O valor da janela depende diretamente de três fatores: 
--da frequência de amostragem (ex:1 amostra a cada 0,5 s)
-	- da capacidade motora do paciente:
-		janelas curtas demais → deixam ruído passar
-		janelas longas demais → achatam o movimento real
-	-do tipo de movimento analisado:
-		dorsiflexão voluntária → janela maior
-		tremor / espasticidade → janela menor
-		marcha lenta → janela intermediária
--O calculo é feito:
--pré‑processamento auxiliar ( base_smooth_window=3) é o tamanho da janela da suavização mínima inicial.
--restrição fisiológica mínima (min_window=5) é o limite inferior permitido para a janela final, evita janelas muito pequenas que não filtram ruído adequadamente e geram falsos extremos
--restrição fisiológica máxima (max_window=6)  é o limite superior permitido para a janela final. Evita suavização excessiva que achata picos e introduz perda de informação funcional
+# Metodologia de Processamento do Sinal
+
+Este documento descreve a metodologia utilizada para processar sinais de
+amplitude articular, explicando os critérios técnicos e fisiológicos que
+orientam as escolhas de filtragem, extração de métricas e visualização.
+
+---
 
 
-3.Aplica‑se uma média móvel centrada (rolling = janela deslizante):
+## 1. Estimativa do intervalo de amostragem
 
--Cada ponto passa a representar a média dos pontos ao redor(pontos vizinhos) e a largura da vizinhança é o valor da janela calculada automáticamente. O sinal é suavizado sem deslocamento temporal (centrer=true).
+Inicialmente, é estimado o intervalo de amostragem do sinal (`dt`),
+definido como o tempo típico entre amostras consecutivas.
+Esse valor estabelece a escala temporal real do sinal e é utilizado
+para relacionar parâmetros computacionais a unidades fisiológicas de tempo.
 
+---
+
+
+## 2. Definição da janela de suavização
+
+A suavização do sinal é realizada por meio de uma média móvel centrada,
+cuja janela (`W`) é calculada automaticamente.
+O valor da janela controla o grau de suavização e depende de três fatores principais:
+
+- **Frequência de amostragem**  
+  Quanto maior a frequência, maior o número de pontos disponível para representar o movimento.
+  (ex:1 amostra a cada 0,5 s)
+
+- **Capacidade motora do paciente**  
+    - janelas curtas demais → deixam ruído passar
+	- janelas longas demais → achatam o movimento real
+
+- **Tipo de movimento analisado**  
+  - Dorsiflexão voluntária → janelas maiores  
+  - Tremor / espasticidade → janelas menores  
+  - Marcha lenta → janelas intermediárias
+
+---
+
+### 2.1 Restrições fisiológicas da janela
+
+Para evitar valores fisiologicamente inadequados, a janela final respeita
+restrições explícitas:
+
+- **Suavização mínima inicial** (`base_smooth_window`)  
+  Aplica um nível mínimo de filtragem antes da adaptação fina da janela.
+  É um pré‑processamento auxiliar
+
+- **Limite inferior** (`min_window`)  
+  É o limite inferior permitido para a janela final / restrição fisiológica mínima
+  Impede janelas muito pequenas, que não filtram adequadamente o ruído
+  e geram falsos extremos.
+
+- **Limite superior** (`max_window`)  
+  É o limite superior permitido para a janela final / restrição fisiológica máxima
+  Evita suavização excessiva que achate picos e introduza perda de informação funcional.
+
+Essas restrições garantem que a suavização permaneça biomecanicamente plausível.
+
+---
+
+
+
+## 3. Suavização por média móvel centrada
+
+Após a definição da janela, o sinal é suavizado por uma média móvel centrada
+(rolling = janela deslizante)
+
+Cada amostra passa a representar a média dos pontos vizinhos dentro da janela `W`,
+sem deslocamento temporal do sinal (rolling window com `center = True`).
+
+A largura da vizinhança é o valor da janela calculada automáticamente.
+
+
+
+--- parei aqui a edição
+
+3.Aplica‑se uma média móvel centrada :
 -Cada valor suavizado representa o comportamento médio do movimento ao longo de (Janela*0,5) segundos
 	-escala temporal da suavização ≈ W⋅dt
 
@@ -142,4 +197,18 @@ Ao migrar de uma análise de eventos individuais para uma análise agregada por 
 	Isso garante que:
 		pequenas oscilações → ignoradas
 		grandes variações → movimento real
+
+
+#dicas pro futuro:
+Dicas objetivas (alto impacto / baixo esforço)
+
+README forte com: Quickstart, dependências, como rodar notebooks/scripts, como reproduzir resultados. [geeksforgeeks.org], [freecodecamp.org]
+Adicionar reprodutibilidade: requirements.txt/environment.yml + instrução de pip install -r .... [geeksforgeeks.org]
+Criar uma pasta notebooks/ e data/ com .gitkeep + instrução de download (sem subir dataset grande). [geeksforgeeks.org]
+Criar Issues tipo “Projeto 1/2/3: objetivo → checklist” e ir fechando com micro-commits (isso gera commits diários “reais”). [github.com], [github.com]
+Se quiser “cara de produto”: criar Release v0.1 quando tiver 1 projeto minimamente reproduzível. [github.com]
+
+Ideias de commits diários não aleatórios (aqui dentro)
+
+“add notebook EDA + gráficos”, “add function X + tests”, “document pipeline”, “refactor módulo Y”, “add example dataset loader”.
 
